@@ -7,18 +7,15 @@ import struct
 
 class OpcRequestHandler(SocketServer.BaseRequestHandler):
 
-    def setup(self):
-        print "Setup"
+    def __init__(self, callback, *args, **keys):
+        self.callback = callback
+        SocketServer.BaseRequestHandler.__init__(self, *args, **keys)
 
     def handle(self):
         print "Connected from", self.client_address
 
         try:
             new_conn = True
-
-            out_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            out_socket.settimeout(1)
-            out_socket.connect(('127.0.0.1', 7891))
 
             while True:
                 header = self.request.recv(4)
@@ -28,30 +25,11 @@ class OpcRequestHandler(SocketServer.BaseRequestHandler):
 
                 frame = bytearray(self.request.recv(n))
 
-                if cmd == 0:
-                    if new_conn:
-                        print n/3
-                        new_conn = False
+                if new_conn & (cmd == 0):
+                    print n
+                    new_conn = False
 
-                    millis = int(round(time.time() * 1000))
-
-                    scale = (math.sin(millis * .001) + 1) * .5
-                    #print scale
-                    new_frame = []
-
-                    for i in range(0, 1560):
-                        r = frame[i * 3]
-                        g = frame[i * 3 + 1]
-                        b = frame[i * 3 + 2]
-
-                        r = int(r * scale)
-                        g = int(g * scale)
-                        #b = int(b * scale)
-
-                        new_frame.append(chr(r) + chr(g) + chr(b))
-
-                    out_socket.send(header)
-                    out_socket.send(''.join(new_frame))
+                self.callback(header, frame)
 
         finally:
             print "Fin"
@@ -60,11 +38,46 @@ class OpcRequestHandler(SocketServer.BaseRequestHandler):
 
 class Server(object):
 
+    def process_frame(self, header, frame):
+        (channel, cmd, n) = struct.unpack('!BBH', header)
+
+        if cmd == 0:
+
+            millis = int(round(time.time() * 1000))
+
+            scale = (math.sin(millis * .001) + 1) * .5
+
+            new_frame = []
+
+            for i in range(0, n/3):
+                r = frame[i * 3]
+                g = frame[i * 3 + 1]
+                b = frame[i * 3 + 2]
+
+                r = int(r * scale)
+                g = int(g * scale)
+                # b = int(b * scale)
+
+                new_frame.append(chr(r) + chr(g) + chr(b))
+
+            self._outsocket.send(header)
+            self._outsocket.send(''.join(new_frame))
+
     def __init__(self, port):
 
+        self._outsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._outsocket.settimeout(1)
+        self._outsocket.connect(('127.0.0.1', port))
+
+        def handler_factory(callback):
+            def createHandler(*args, **keys):
+                return OpcRequestHandler(callback, *args, **keys)
+
+            return createHandler
+
         address = ('0.0.0.0', 7890)
-        server = SocketServer.ThreadingTCPServer(address, OpcRequestHandler)
+        server = SocketServer.ThreadingTCPServer(address, handler_factory(self.process_frame))
 
         server.serve_forever()
 
-Server(7890)
+Server(7891)
