@@ -44,14 +44,13 @@ class Server(object):
 
     def process_frame(self, source, header, frame):
 
-        if source == 1:
-            self.a_frame = frame
-        else:
-            self.b_frame = frame
-
         (channel, cmd, n) = struct.unpack('!BBH', header)
 
         if cmd == 0:
+            if source % 2 == 0:
+                self.a_frame = frame
+            else:
+                self.b_frame = frame
 
             new_frame = []
 
