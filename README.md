@@ -1,14 +1,16 @@
 # opcmixer
 
-A Clojure library designed to ... well, that part is up to you.
+[![Build Status](https://travis-ci.org/shen-tian/opcmixer.svg?branch=master)](https://travis-ci.org/shen-tian/opcmixer)
+
+A Clojure app for mixing of Open Pixel Control streams. 
 
 ## Usage
 
-FIXME
+...
 
 ## License
 
-Copyright © 2016 FIXME
+Copyright © 2016 Shen Tian
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
