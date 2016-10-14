@@ -34,19 +34,32 @@
       (handler (wrap-duplex-stream opc-protocol s) info))
     {:port port}))
 
-(def x (atom 0))
+(defn opc-client
+  [host port]
+  (d/chain (tcp/client {:host host, :port port})
+           #(wrap-duplex-stream opc-protocol %)))
+
+(def x (atom []))
+
+(def i-ch (atom {}))
 
 (defn print-handler
   [opc-struct]
   (let [len (count (nth opc-struct 2))]  
-    (swap! x (fn [n] len))
+    (if (= len 5)
+      (prn "special: " (str opc-struct))
+      (swap! i-ch (fn [i] {:timestamp (System/currentTimeMillis)
+                           :colors (take 10 (nth opc-struct 2))})))
+    ;;(prn (System/currentTimeMillis))
+    (swap! x #(conj % (System/currentTimeMillis)))
     ;;(prn len)
-    ))
+    ))  
 
 (defn my-handler
   "OPC Handler."
   [s info]
-  (prn (str (:remote-addr info)))
+  (s/on-drained s #(prn "closed"))
+  (prn (str "new conn: "(:remote-addr info)))
   (s/consume print-handler s))
 
 
@@ -54,12 +67,18 @@
   [req]
   {:status 200
    :headers {"content-type" "text/plain"}
-   :body (str "hello world!" @x)})
+   :body (str "hello world!" @i-ch)})
+
+(defn start-web
+  []
+  (http/start-server hello-world-handler {:port 8080}))
 
 (defn -main
   "Entry point."
   [& args]
   (def s (start-server my-handler 7890))
-  (def s2 (http/start-server hello-world-handler {:port 10000}))
+  ;;(def s2 (http/start-server hello-world-handler {:port 10000}))
+  ;;(def ping (s/periodically 500 (fn [] "hi")))
+  ;;(s/consume #(prn %) ping)
   (prn "Server up. Listening...")
   (read-line))
