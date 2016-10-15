@@ -41,20 +41,41 @@
   (d/chain (tcp/client {:host host, :port port})
            #(wrap-duplex-stream opc-protocol %)))
 
+(defn get-frame [m]
+  (let [stream-count (count m)]
+    (if (= stream-count 0)
+      [0 0 [0 0 0]]
+      [0 0 
+       (let [x (into '[] (map #(int (/ % stream-count)) 
+                               (reduce (fn [f1 f2] 
+                                         (if (= (count f1) (count f2))
+                                           (into '[] (map + f1 f2))
+                                           f1))
+                                       (map #(:frame (last %)) m))))]
+         (if (<  (count x) 1) 
+           [0 0 0]
+           x))])))
+
+;; 17ms = approx 60fps
+(defn start-client 
+  [host port m]
+  (s/connect
+   (s/periodically 17 #(get-frame @m))
+   @(opc-client host port)))
 
 (defn add-stream [id]
   (fn [m]
     (assoc m (keyword id) '{:name "name"})))
+
+(defn remove-stream [id]
+  (fn [m]
+    (dissoc m (keyword id))))
 
 (defn update-frame [id frame]
   (fn [m]
     (let [key (keyword id)]
       (update m key
               (fn [stream] (assoc stream :frame frame))))))
-
-(defn remove-stream [id]
-  (fn [m]
-    (dissoc m (keyword id))))
 
 (def opc-streams (atom '{})) ;;   
 
@@ -80,8 +101,7 @@
    :body (str @opc-streams)})
 
 (compojure/defroutes app-routes
-  (GET "/" [] hello-world-handler)
-  (GET "/color/" [] (str @i-ch)))
+  (GET "/" [] hello-world-handler))
 
 (defn start-web
   []
@@ -91,8 +111,7 @@
   "Entry point."
   [& args]
   (def s (start-server handler 7890))
-  ;;(def s2 (http/start-server hello-world-handler {:port 10000}))
-  ;;(def ping (s/periodically 500 (fn [] "hi")))
-  ;;(s/consume #(prn %) ping)
+  (def w (start-web))
+  (start-client "localhost" 7891 opc-streams)
   (prn "Server up. Listening...")
   (read-line))
