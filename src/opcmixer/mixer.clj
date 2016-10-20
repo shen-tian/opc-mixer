@@ -2,46 +2,37 @@
   (require
    [manifold.deferred :as d]
    [manifold.stream :as s]
-   [clojure.edn :as edn]
+   ;;[clojure.edn :as edn]
    [aleph.tcp :as tcp]
    [aleph.http :as http]
-   [gloss.core :as gloss]
    [gloss.io :as io]
    [compojure.core :as compojure :refer [GET]]
-   [compojure.route :as route])
+   [compojure.route :as route]
+   [clj-opc.core :as opc])
   (:gen-class))
 
-;; The OPC protocol. Thanks gloss!
-(def opc-protocol
-  (gloss/compile-frame
-   [:ubyte 
-    :ubyte
-    (gloss/repeated :ubyte :prefix :uint16)]))
-
-;; Not sure what this does...
 (defn wrap-duplex-stream
   [protocol s]
+  "Generally useful function. Create the return stream out.
+  Then it attaches the encoder and decoders, and splies the return
+  stream with the incoming stream."
   (let [out (s/stream)]
     (s/connect
      (s/map #(io/encode protocol %) out)
-      s)
+     s)
     (s/splice
      out
       (io/decode-stream s protocol))))
 
-(defn start-server
-  [handler port]
+(defn start-server [handler port]
+  "Starts the TCP server"
   (tcp/start-server
     (fn [s info]
-      (handler (wrap-duplex-stream opc-protocol s) info))
+      (handler (wrap-duplex-stream opc/opc-protocol s) info))
     {:port port}))
 
-(defn opc-client
-  [host port]
-  (d/chain (tcp/client {:host host, :port port})
-           #(wrap-duplex-stream opc-protocol %)))
-
 (defn get-frame [m]
+  "Gets a frame. Pretty messy at the moment, but works"
   (let [stream-count (count m)]
     (if (= stream-count 0)
       [0 0 [0 0 0]]
@@ -56,12 +47,14 @@
            [0 0 0]
            x))])))
 
-;; 17ms = approx 60fps
-(defn start-client 
-  [host port m]
+
+(defn start-client [host port m]
+  "This is pretty neat: creates a new stream that uses get-frame
+   to generate output, running at 60fps, then connects that to the
+   opc-client sink directly"
   (s/connect
    (s/periodically 17 #(get-frame @m))
-   @(opc-client host port)))
+   (:in @(opc/client host port))))
 
 (defn add-stream [id]
   (fn [m]
@@ -77,11 +70,11 @@
       (update m key
               (fn [stream] (assoc stream :frame frame))))))
 
-(def opc-streams (atom '{})) ;;   
+;; Stores state of input streams
+(def opc-streams (atom '{}))   
 
-(defn handler
+(defn handler [s info]
   "OPC Handler."
-  [s info]
   (let [id (str (System/currentTimeMillis))]
     (s/on-drained s (fn [] 
                       (prn "closed")
@@ -107,9 +100,8 @@
   []
   (http/start-server hello-world-handler {:port 8080}))
 
-(defn -main
+(defn -main [& args]
   "Entry point."
-  [& args]
   (def s (start-server handler 7890))
   (def w (start-web))
   (start-client "localhost" 7891 opc-streams)
