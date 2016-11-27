@@ -1,14 +1,10 @@
 (ns opcmixer.mixer
-  (require
-   [manifold.deferred :as d]
-   [manifold.stream :as s]
-   ;;[clojure.edn :as edn]
-   [aleph.tcp :as tcp]
-   [aleph.http :as http]
-   [gloss.io :as io]
-   [compojure.core :as compojure :refer [GET]]
-   [compojure.route :as route]
-   [clj-opc.core :as opc])
+  (:require [aleph.http :as http]
+            [aleph.tcp :as tcp]
+            [clj-opc.core :as opc]
+            [compojure.core :as compojure :refer [GET]]
+            [gloss.io :as io]
+            [manifold.stream :as s])
   (:gen-class))
 
 (defn wrap-duplex-stream
