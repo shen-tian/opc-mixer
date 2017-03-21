@@ -32,14 +32,15 @@
       (handler (wrap-duplex-stream opc/opc-protocol s) info))
     {:port port}))
 
-(defn get-frame
+(defn get-frame-blend
   [stream-count m]
-  (map #(int (/ % stream-count)) 
+  (map #(int (* (/ (:level (val (first m))) 100) 
+                (/ % stream-count))) 
        (reduce (fn [f1 f2] 
                  (if (= (count f1) (count f2))
                    (into '[] (map + f1 f2))
                    f1))
-               (map #(:frame (last %)) m))))
+               (map #(:frame (val %)) m))))
 
 (defn get-frame [m]
   "Gets a frame. Pretty messy at the moment, but works"
@@ -47,7 +48,7 @@
     (if (= stream-count 0)
       [0 0 [0 0 0]]
       [0 0 
-       (let [x (into '[] (get-frame stream-count m))]
+       (let [x (into '[] (get-frame-blend stream-count m))]
          (if (<  (count x) 1) 
            [0 0 0]
            x))])))
@@ -123,12 +124,18 @@
 (compojure/defroutes app-routes
   (GET "/" [] hello-world-handler)
   (GET "/controls/" [] control-hanlder)
-  (POST "/controls/" {body :body} (reset! foo-ctrl body) )
+  (POST "/controls/" {body :body} 
+        (let [k (keyword (first (keys body)))]
+          (prn body)
+          (swap! opc-streams 
+                 #(assoc-in % 
+                            [k :level]
+                            (read-string (get-in body [k :level]))))))
   (route/not-found "<h1>Page not found</h1>"))
 
 (def app
   (-> app-routes
-      wrap-json-body
+      (wrap-json-body {:keywords? true :bigdecimals? true})
       wrap-json-response
       (wrap-cors :access-control-allow-origin 
                  [#"http://localhost:3449"]
