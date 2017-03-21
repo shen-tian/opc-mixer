@@ -32,18 +32,22 @@
       (handler (wrap-duplex-stream opc/opc-protocol s) info))
     {:port port}))
 
+(defn get-frame
+  [stream-count m]
+  (map #(int (/ % stream-count)) 
+       (reduce (fn [f1 f2] 
+                 (if (= (count f1) (count f2))
+                   (into '[] (map + f1 f2))
+                   f1))
+               (map #(:frame (last %)) m))))
+
 (defn get-frame [m]
   "Gets a frame. Pretty messy at the moment, but works"
   (let [stream-count (count m)]
     (if (= stream-count 0)
       [0 0 [0 0 0]]
       [0 0 
-       (let [x (into '[] (map #(int (/ % stream-count)) 
-                               (reduce (fn [f1 f2] 
-                                         (if (= (count f1) (count f2))
-                                           (into '[] (map + f1 f2))
-                                           f1))
-                                       (map #(:frame (last %)) m))))]
+       (let [x (into '[] (get-frame stream-count m))]
          (if (<  (count x) 1) 
            [0 0 0]
            x))])))
@@ -59,7 +63,9 @@
 
 (defn add-stream [id]
   (fn [m]
-    (assoc m (keyword id) '{:name "name"})))
+    (assoc m (keyword id) '{:name "name"
+                            :show true
+                            :level 100})))
 
 (defn remove-stream [id]
   (fn [m]
@@ -72,10 +78,11 @@
               (fn [stream] (assoc stream :frame frame))))))
 
 ;; Stores state of input streams
-(def opc-streams (atom '{}))   
+(defonce opc-streams (atom '{}))   
 
-(defn handler [s info]
+(defn handler
   "OPC Handler."
+  [s info]
   (let [id (str (System/currentTimeMillis))]
     (s/on-drained s (fn [] 
                       (prn "closed")
@@ -90,12 +97,7 @@
 
 ;;;;;;;;;; The web parts ;;;;;;;;;;;;;
 
-(defonce foo-ctrl (atom {:channel1 {:name "Channel 1"
-                                    :show true
-                                    :level 75}
-                         :channel2 {:name "Channel 2"
-                                    :show false
-                                    :level 25}}))
+(defonce foo-ctrl (atom {}))
 
 (defn hello-world-handler
   [req]
@@ -103,11 +105,19 @@
    :headers {"content-type" "text/plain"}
    :body @opc-streams})
 
+(defn map-values
+  [m keys f & args]
+  (reduce #(apply update-in %1 [%2] f args) m keys))
+
+
 (defn control-hanlder
   [req]
   {:status 200
    :headers {"content-type" "text/plain"}
-   :body @foo-ctrl})
+   :body (let [streams @opc-streams]
+           (map-values streams
+                       (keys streams)
+                       dissoc :frame))})
 
 
 (compojure/defroutes app-routes
