@@ -2,7 +2,8 @@
   (:require [aleph.http :as http]
             [aleph.tcp :as tcp]
             [clj-opc.core :as opc]
-            [compojure.core :as compojure :refer [GET]]
+            [compojure.core :as compojure :refer [GET POST]]
+            [compojure.route :as route]
             [gloss.io :as io]
             [manifold.stream :as s]
             [ring.middleware.json :refer [wrap-json-params 
@@ -24,7 +25,7 @@
      out
       (io/decode-stream s protocol))))
 
-(defn start-server [handler port]
+(defn start-tcp [handler port]
   "Starts the TCP server"
   (tcp/start-server
     (fn [s info]
@@ -87,33 +88,66 @@
                      (prn "special: " (str frame))
                      (swap! opc-streams (update-frame id frame))))) s)))
 
+;;;;;;;;;; The web parts ;;;;;;;;;;;;;
+
+(defonce foo-ctrl (atom {:channel1 {:name "Channel 1"
+                                    :show true
+                                    :level 75}
+                         :channel2 {:name "Channel 2"
+                                    :show false
+                                    :level 25}}))
+
 (defn hello-world-handler
   [req]
   {:status 200
    :headers {"content-type" "text/plain"}
    :body @opc-streams})
 
+(defn control-hanlder
+  [req]
+  {:status 200
+   :headers {"content-type" "text/plain"}
+   :body @foo-ctrl})
+
 
 (compojure/defroutes app-routes
-  (GET "/" [] hello-world-handler))
+  (GET "/" [] hello-world-handler)
+  (GET "/controls/" [] control-hanlder)
+  (POST "/controls/" {body :body} (reset! foo-ctrl body) )
+  (route/not-found "<h1>Page not found</h1>"))
 
-(def app 
+(def app
   (-> app-routes
       wrap-json-body
       wrap-json-response
       (wrap-cors :access-control-allow-origin 
                  [#"http://localhost:3449"]
-                 :access-control-allow-methods [:get]
+                 :access-control-allow-methods [:get :post]
                  :access-control-allow-credentials "true")))
 
 (defn start-web
-  []
-  (http/start-server app {:port 8080}))
+  [handler port]
+  (http/start-server handler {:port port}))
 
-(defn -main [& args]
+;;;;;;;;; App entry ;;;;;;;;;;;;;;;;;;
+
+(defonce app-state (atom '{}))
+
+(defn start-server
+  []
+  (swap! app-state assoc :s (start-tcp handler 7890))
+  (swap! app-state assoc :w (start-web app 8080)))
+
+(defn stop-server
+  []
+  (.close (:s @app-state))
+  (.close (:w @app-state))
+  (swap! app-state dissoc :s :w))
+
+(defn -main 
   "Entry point."
-  (def s (start-server handler 7890))
-  (def w (start-web))
+  [& args]
+  (start-server)
   (start-client "localhost" 7891 opc-streams)
   (prn "Server up. Listening...")
   (read-line))
