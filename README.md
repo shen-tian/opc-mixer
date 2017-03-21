@@ -37,7 +37,6 @@ Future features:
  
 ## License
 
-Copyright © 2016 Shen Tian
+Copyright © 2017 Shen Tian
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Distributed under the Eclipse Public License version 1.0

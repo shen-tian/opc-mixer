@@ -4,7 +4,11 @@
             [clj-opc.core :as opc]
             [compojure.core :as compojure :refer [GET]]
             [gloss.io :as io]
-            [manifold.stream :as s])
+            [manifold.stream :as s]
+            [ring.middleware.json :refer [wrap-json-params 
+                                          wrap-json-response 
+                                          wrap-json-body]]
+            [ring.middleware.cors :refer [wrap-cors]])
   (:gen-class))
 
 (defn wrap-duplex-stream
@@ -87,14 +91,24 @@
   [req]
   {:status 200
    :headers {"content-type" "text/plain"}
-   :body (str @opc-streams)})
+   :body @opc-streams})
+
 
 (compojure/defroutes app-routes
   (GET "/" [] hello-world-handler))
 
+(def app 
+  (-> app-routes
+      wrap-json-body
+      wrap-json-response
+      (wrap-cors :access-control-allow-origin 
+                 [#"http://localhost:3449"]
+                 :access-control-allow-methods [:get]
+                 :access-control-allow-credentials "true")))
+
 (defn start-web
   []
-  (http/start-server hello-world-handler {:port 8080}))
+  (http/start-server app {:port 8080}))
 
 (defn -main [& args]
   "Entry point."

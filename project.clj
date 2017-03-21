@@ -8,7 +8,9 @@
                  [compojure "1.5.1"]
                  [aleph "0.4.1"]
                  [manifold "0.1.5"]
-                 [gloss "0.2.5"]]
+                 [gloss "0.2.5"]
+                 [ring/ring-json "0.4.0"]
+                 [ring-cors "0.1.9"]]
   :main opcmixer.mixer
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
