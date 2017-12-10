@@ -18,7 +18,8 @@
 
 (defn channel-comp
   [name]
-  (let [ch (re-frame/subscribe [:chan-info name])]
+  (let [ch (re-frame/subscribe [:chan-info name])
+        frame (re-frame/subscribe [:channel name])]
     (fn [name]
       [:div
        [:p (:name @ch)]
@@ -27,7 +28,24 @@
                 :on-change #(toggle-show name)}]
        [:input {:type "range"
                 :value (:level @ch)
-                :on-change #(update-level name (-> % .-target .-value))}]])))
+                :on-change #(update-level name
+                                          (-> % .-target .-value))}]
+       [:button {:on-click #(re-frame/dispatch [:fetch-frame name])}
+        "fetch"]
+       (into
+        [:svg {:width 512
+               :height 8}]
+        (for [i (range 64)]
+          (let [[red green blue] (take 3 (drop (* 3 i) (:frame @frame)))]
+            [:rect {:x (* 8 i)
+                    :y 0
+                    :width 8
+                    :height 8
+                    :style {:fill @(col/as-css (col/rgba (/ red 255)
+                                                         (/ green 255)
+                                                         (/ blue 255) 1))}}]))
+
+         )])))
 
 (defn main-panel []
   (let [ch-names (re-frame/subscribe [:ch-names])]

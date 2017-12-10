@@ -18,6 +18,11 @@
    (:hue db)))
 
 (re-frame/reg-sub
+ :channel
+ (fn [db [_ id]]
+   (get-in db [:channel (name id) :frame])))
+
+(re-frame/reg-sub
  :pix
  (fn [db _]
    (:pix db)))

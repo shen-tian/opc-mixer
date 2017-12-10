@@ -35,6 +35,21 @@
  (fn [db [_ channel]]
    (update-in db [:app-log channel :show] not)))
 
+(re-frame/reg-event-db
+ :frame-changed
+ (fn [db [_ id new-frame]]
+   (assoc-in db [:channel id :frame] new-frame)))
+
+(re-frame/reg-event-fx
+ :fetch-frame
+ (fn [_ [_ id]]
+   {:http-xhrio {:method :get
+                 :uri (str "http://localhost:8080/channel/" (name id))
+                 :response-format (ajax/json-response-format
+                                   {:keywords? true})
+                 :on-success [:frame-changed (name id)]
+                 :on-failure [:print-response id]}}))
+
 (re-frame/reg-event-fx
  :get-frame
  (fn [{:keys [db]} [_ a]]

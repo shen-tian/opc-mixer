@@ -13,10 +13,10 @@
   (:gen-class))
 
 (defn wrap-duplex-stream
-  [protocol s]
   "Generally useful function. Create the return stream out.
   Then it attaches the encoder and decoders, and splies the return
   stream with the incoming stream."
+  [protocol s]
   (let [out (s/stream)]
     (s/connect
      (s/map #(io/encode protocol %) out)
@@ -25,8 +25,9 @@
      out
       (io/decode-stream s protocol))))
 
-(defn start-tcp [handler port]
+(defn start-tcp
   "Starts the TCP server"
+  [handler port]
   (tcp/start-server
     (fn [s info]
       (handler (wrap-duplex-stream opc/opc-protocol s) info))
@@ -42,8 +43,9 @@
                    f1))
                (map #(:frame (val %)) m))))
 
-(defn get-frame [m]
+(defn get-frame
   "Gets a frame. Pretty messy at the moment, but works"
+  [m]
   (let [stream-count (count m)]
     (if (= stream-count 0)
       [0 0 [0 0 0]]
@@ -54,10 +56,11 @@
            x))])))
 
 
-(defn start-client [host port m]
+(defn start-client
   "This is pretty neat: creates a new stream that uses get-frame
    to generate output, running at 60fps, then connects that to the
    opc-client sink directly"
+  [host port m]
   (s/connect
    (s/periodically 17 #(get-frame @m))
    (:in @(opc/client host port))))
@@ -74,9 +77,7 @@
 
 (defn update-frame [id frame]
   (fn [m]
-    (let [key (keyword id)]
-      (update m key
-              (fn [stream] (assoc stream :frame frame))))))
+    (assoc-in m [(keyword id) :frame] frame)))
 
 ;; Stores state of input streams
 (defonce opc-streams (atom '{}))
@@ -94,7 +95,8 @@
                  (let [frame (nth opc-struct 2)]
                    (if (= (count frame) 5)
                      (prn "special: " (str frame))
-                     (swap! opc-streams (update-frame id frame))))) s)))
+                     (swap! opc-streams (update-frame id frame)))))
+               s)))
 
 ;;;;;;;;;; Boiler plate ws part ;;;;;;
 
@@ -123,7 +125,7 @@
   [req]
   {:status 200
    :headers {"content-type" "text/plain"}
-   :body "Hii?";;@opc-streams
+   :body @opc-streams
    })
 
 (defn map-values
@@ -140,8 +142,15 @@
                        (keys streams)
                        dissoc :frame))})
 
+(defn channel-handler
+  [id]
+  (fn [request]
+    {:status 200
+     :body (get @opc-streams (keyword id))}))
+
 (compojure/defroutes app-routes
   (GET "/" [] hello-world-handler)
+  (GET "/channel/:id" [id] (channel-handler id))
   (GET "/controls/" [] control-hanlder)
   (POST "/controls/" {body :body}
         (let [k (keyword (first (keys body)))]
