@@ -1,8 +1,12 @@
 (ns opcmixer-frontend.events
-    (:require [re-frame.core :as re-frame]
-              [day8.re-frame.http-fx]
-              [ajax.core :as ajax]
-              [opcmixer-frontend.db :as db]))
+  (:require [re-frame.core :as re-frame]
+            [day8.re-frame.http-fx]
+            [ajax.core :as ajax]
+            [opcmixer-frontend.db :as db]
+            [chord.client :refer [ws-ch]]
+            ;;[cljs.core.async :refer [<!!]]
+)
+  (:require-macros [cljs.core.async.macros :refer [go]]))
 
 (re-frame/reg-event-db
  :initialize-db
@@ -36,7 +40,7 @@
  (fn [{:keys [db]} [_ a]]
    {:http-xhrio {:method :get
                  :uri "http://localhost:8080/controls/"
-                 :response-format (ajax/json-response-format 
+                 :response-format (ajax/json-response-format
                                    {:keywords? true})
                  :on-success  [:process-blah-response]
                  :on-failure  [:process-blah-response]}
@@ -49,8 +53,36 @@
                  :uri "http://localhost:8080/controls/"
                  :params @(re-frame/subscribe [:app-log])
                  :format          (ajax/json-request-format)
-                 :response-format (ajax/json-response-format 
+                 :response-format (ajax/json-response-format
                                    {:keywords? true})
                  :on-success  [:print-response]
                  :on-failure  [:print-response]}
     :db (assoc db :flag false)}))
+
+(defonce ws-chan (atom nil))
+
+(re-frame/reg-event-db
+ :open-ws
+ (fn [db _]
+   (go
+     (let [{:keys [ws-channel error]} (<! (ws-ch "ws://localhost:8080/echo"))]
+       (if-not error
+         (do
+           (reset! ws-chan ws-channel)
+           (while true
+             (let [{:keys [message]} (<! ws-channel)]
+               (re-frame/dispatch [:recv-msg message]))))
+
+         (js/console.log "Error:" (pr-str error)))))
+   db))
+
+(re-frame/reg-event-db
+ :send-msg
+ (fn [db [_ msg]]
+   (go (>! @ws-chan msg))
+   db))
+
+(re-frame/reg-event-db
+ :recv-msg
+ (fn [db [_ msg]]
+   (assoc db :message msg)))

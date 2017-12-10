@@ -6,8 +6,8 @@
             [compojure.route :as route]
             [gloss.io :as io]
             [manifold.stream :as s]
-            [ring.middleware.json :refer [wrap-json-params 
-                                          wrap-json-response 
+            [ring.middleware.json :refer [wrap-json-params
+                                          wrap-json-response
                                           wrap-json-body]]
             [ring.middleware.cors :refer [wrap-cors]])
   (:gen-class))
@@ -34,9 +34,9 @@
 
 (defn get-frame-blend
   [stream-count m]
-  (map #(int (* (/ (:level (val (first m))) 100) 
-                (/ % stream-count))) 
-       (reduce (fn [f1 f2] 
+  (map #(int (* (/ (:level (val (first m))) 100)
+                (/ % stream-count)))
+       (reduce (fn [f1 f2]
                  (if (= (count f1) (count f2))
                    (into '[] (map + f1 f2))
                    f1))
@@ -47,9 +47,9 @@
   (let [stream-count (count m)]
     (if (= stream-count 0)
       [0 0 [0 0 0]]
-      [0 0 
+      [0 0
        (let [x (into '[] (get-frame-blend stream-count m))]
-         (if (<  (count x) 1) 
+         (if (<  (count x) 1)
            [0 0 0]
            x))])))
 
@@ -79,13 +79,13 @@
               (fn [stream] (assoc stream :frame frame))))))
 
 ;; Stores state of input streams
-(defonce opc-streams (atom '{}))   
+(defonce opc-streams (atom '{}))
 
 (defn handler
   "OPC Handler."
   [s info]
   (let [id (str (System/currentTimeMillis))]
-    (s/on-drained s (fn [] 
+    (s/on-drained s (fn []
                       (prn "closed")
                       (swap! opc-streams (remove-stream id))))
     (prn (str "new conn: "(:remote-addr info)))
@@ -96,6 +96,25 @@
                      (prn "special: " (str frame))
                      (swap! opc-streams (update-frame id frame))))) s)))
 
+;;;;;;;;;; Boiler plate ws part ;;;;;;
+
+
+(def non-websocket-request
+  {:status 400
+   :headers {"content-type" "application/text"}
+   :body "Expected a websocket request."})
+
+
+(defn echo-handler
+  [req]
+  (if-let [socket (try
+                    @(http/websocket-connection req)
+                    (catch Exception e
+                      nil))]
+    ;;(s/consume (fn [foo] (println (str foo))) socket)
+    (s/connect socket socket)
+    non-websocket-request))
+
 ;;;;;;;;;; The web parts ;;;;;;;;;;;;;
 
 (defonce foo-ctrl (atom {}))
@@ -104,7 +123,8 @@
   [req]
   {:status 200
    :headers {"content-type" "text/plain"}
-   :body @opc-streams})
+   :body "Hii?";;@opc-streams
+   })
 
 (defn map-values
   [m keys f & args]
@@ -120,24 +140,24 @@
                        (keys streams)
                        dissoc :frame))})
 
-
 (compojure/defroutes app-routes
   (GET "/" [] hello-world-handler)
   (GET "/controls/" [] control-hanlder)
-  (POST "/controls/" {body :body} 
+  (POST "/controls/" {body :body}
         (let [k (keyword (first (keys body)))]
           (prn body)
-          (swap! opc-streams 
-                 #(assoc-in % 
+          (swap! opc-streams
+                 #(assoc-in %
                             [k :level]
                             (read-string (get-in body [k :level]))))))
+  (GET "/echo" [] echo-handler)
   (route/not-found "<h1>Page not found</h1>"))
 
 (def app
   (-> app-routes
       (wrap-json-body {:keywords? true :bigdecimals? true})
       wrap-json-response
-      (wrap-cors :access-control-allow-origin 
+      (wrap-cors :access-control-allow-origin
                  [#"http://localhost:3449"]
                  :access-control-allow-methods [:get :post]
                  :access-control-allow-credentials "true")))
@@ -161,7 +181,7 @@
   (.close (:w @app-state))
   (swap! app-state dissoc :s :w))
 
-(defn -main 
+(defn -main
   "Entry point."
   [& args]
   (start-server)

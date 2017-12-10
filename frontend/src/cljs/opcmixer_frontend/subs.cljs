@@ -31,3 +31,8 @@
  :chan-info
  (fn [db [_ name]]
    (get-in db [:app-log (keyword name)])))
+
+(re-frame/reg-sub
+ :last-message
+ (fn [db _]
+   (:message db)))

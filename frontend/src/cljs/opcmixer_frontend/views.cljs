@@ -32,12 +32,18 @@
 (defn main-panel []
   (let [ch-names (re-frame/subscribe [:ch-names])]
     (fn []
-      [:div 
+      [:div
        [:h1 "OPC Mixer"]
        [:button {:type "button"
                  :on-click #(re-frame/dispatch [:get-frame])} "Fetch"]
        [:button {:type "button"
                  :on-click #(re-frame/dispatch [:post-frame])} "Send"]
+       [:button {:type "button"
+                 :on-click #(re-frame/dispatch [:open-ws])} "Open"]
+       [:button {:type "button"
+                 :on-click #(re-frame/dispatch
+                             [:send-msg (js/Date.now)])} "Send"]
+       [:div @(re-frame/subscribe [:last-message])]
        (for [ch @ch-names]
          ^{:key ch}
          [channel-comp ch])
